@@ -301,7 +301,7 @@ def get_tool_handler(
                 logger.info(f"Calling endpoint: {endpoint_name}, with args: {args} and meta: {meta}")
                 try:
                     result = await session.call_tool(endpoint_name, arguments=args, meta=meta if meta else None)
-
+                logger.info(f"{result}")
                     if result.isError:
                         error_message = "Unknown tool execution error"
                         error_data = None  # Initialize error_data
