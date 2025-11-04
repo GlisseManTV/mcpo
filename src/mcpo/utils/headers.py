@@ -60,16 +60,16 @@ def filter_headers(
         # Skip if in blacklist
         if blacklist and match_header_pattern(header_name, blacklist):
             if debug_headers:
-                logger.debug(f"Header '{header_name}' blocked by blacklist")
+                logger.info(f"Header '{header_name}' blocked by blacklist")
             continue
         
         # Include if in whitelist (or no whitelist specified)
         if not whitelist or match_header_pattern(header_name, whitelist):
             filtered_headers[header_name] = header_value
             if debug_headers:
-                logger.debug(f"Header '{header_name}' forwarded")
+                logger.info(f"Header '{header_name}' forwarded")
         elif debug_headers:
-            logger.debug(f"Header '{header_name}' not in whitelist")
+            logger.info(f"Header '{header_name}' not in whitelist")
     
     return filtered_headers
 
@@ -94,6 +94,6 @@ def process_headers_for_server(
     filtered_headers = filter_headers(request_headers, whitelist, blacklist, debug_headers)
     
     if debug_headers:
-        logger.debug(f"Final forwarded headers: {list(filtered_headers.keys())}")
+        logger.info(f"Final forwarded headers: {list(filtered_headers.keys())}")
     
     return filtered_headers
