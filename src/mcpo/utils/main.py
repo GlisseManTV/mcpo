@@ -1,4 +1,5 @@
 import json
+import copy
 import traceback
 from typing import Any, Dict, ForwardRef, List, Optional, Type, Union
 import logging
@@ -268,7 +269,7 @@ def get_model_fields(form_model_name, properties, required_fields, schema_defs=N
 
 def mask_sensitive_headers(args: dict) -> dict:
     """Masks sensitive header values in logs."""
-    masked = args.copy()
+    masked = copy.deepcopy(args)
 
     if "mcpo_headers" in masked and isinstance(masked["mcpo_headers"], dict):
         headers = masked["mcpo_headers"]
@@ -327,8 +328,8 @@ def get_tool_handler(
                 # Add headers to _meta if any headers are being forwarded
                 if forwarded_headers:
                     args["mcpo_headers"] = forwarded_headers
-                # masked_args = mask_sensitive_headers(args)                
-                logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
+                masked_args = mask_sensitive_headers(args)                
+                logger.info(f"Calling endpoint: {endpoint_name}, with args: {masked_args}")
                 try:
                     result = await session.call_tool(endpoint_name, arguments=args)
                     logger.info(f"{result}")
