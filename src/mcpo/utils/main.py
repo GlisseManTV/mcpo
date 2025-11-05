@@ -266,38 +266,6 @@ def get_model_fields(form_model_name, properties, required_fields, schema_defs=N
 
     return model_fields
 
-def mask_sensitive_headers(args: dict) -> dict:
-    """Masks sensitive header values in logs."""
-    masked = args.copy()
-
-    if "mcpo_headers" in masked and isinstance(masked["mcpo_headers"], dict):
-        headers = masked["mcpo_headers"]
-        sensitive_keys = {
-            "authorization",
-            "token",
-            "api-key",
-            "x-api-key",
-            "x-auth-token",
-            "x-authorization",
-        }
-
-        for key in headers:
-            if key.lower() in sensitive_keys:
-                value = headers[key]
-                if isinstance(value, str):
-                    if value.lower().startswith("bearer "):
-                        headers[key] = "Bearer *****"
-                    elif value.lower().startswith("basic "):
-                        headers[key] = "Basic *****"
-                    elif value.lower().startswith("api-key "):
-                        headers[key] = "API-Key *****"
-                    else:
-                        headers[key] = "*****"
-            elif isinstance(headers[key], dict):
-                headers[key] = mask_sensitive_headers({"value": headers[key]})["value"]
-
-    return masked
-
 
 def get_tool_handler(
     session,
@@ -316,22 +284,20 @@ def get_tool_handler(
 
         def make_endpoint_func(
             endpoint_name: str, FormModel, session: ClientSession
-        ):
-            async def tool(
-                form_data: FormModel, request: Request
-            ) -> Union[ResponseModel, Any]:
+        ):  # Parameterized endpoint
+            async def tool(form_data: FormModel, request: Request) -> Union[ResponseModel, Any]:
                 args = form_data.model_dump(exclude_none=True, by_alias=True)
-
+                
+                # Process headers for forwarding if configured
                 forwarded_headers = {}
                 if client_header_forwarding_config and client_header_forwarding_config.get("enabled", False):
                     forwarded_headers = process_headers_for_server(request, client_header_forwarding_config)
-
+                
+                # Add headers to _meta if any headers are being forwarded
                 if forwarded_headers:
                     args["mcpo_headers"] = forwarded_headers
-
-                masked_args = mask_sensitive_headers(args)
-
-                logger.info(f"Calling endpoint: {endpoint_name}, with args: {masked_args}")
+                
+                logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
                 try:
                     result = await session.call_tool(endpoint_name, arguments=args)
                     logger.info(f"{result}")
@@ -390,13 +356,14 @@ def get_tool_handler(
                 forwarded_headers = {}
                 if client_header_forwarding_config and client_header_forwarding_config.get("enabled", False):
                     forwarded_headers = process_headers_for_server(request, client_header_forwarding_config)
+
                 
                 # Add headers to _meta if any headers are being forwarded
                 arguments = {}
                 if forwarded_headers:
-                    arguments["mcpo_headers"] = forwarded_headers
+                    arguments["__mcpo_forwarded_headers__"] = forwarded_headers
                 
-                logger.info(f"Calling endpoint: {endpoint_name}, , with no args")
+                logger.info(f"Calling endpoint: {endpoint_name}, with args: {arguments}")
                 try:
                     result = await session.call_tool(endpoint_name, arguments=arguments)
 
