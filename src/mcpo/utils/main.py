@@ -294,17 +294,16 @@ def get_tool_handler(
                     forwarded_headers = process_headers_for_server(request, client_header_forwarding_config)
                 
                 # Add headers to _meta if any headers are being forwarded
-                meta = {}
                 if forwarded_headers:
-                    meta["headers"] = forwarded_headers
+                    args["__mcpo_forwarded_headers__"] = forwarded_headers
                 
-                logger.info(f"Calling endpoint: {endpoint_name}, with args: {args} and meta: {meta}")
+                logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
                 try:
-                    result = await session.call_tool(endpoint_name, arguments=args, meta=meta if meta else None)
+                    result = await session.call_tool(endpoint_name, arguments=args)
                     logger.info(f"{result}")
                     if result.isError:
                         error_message = "Unknown tool execution error"
-                        error_data = None  # Initialize error_data
+                        error_data = None
                         if result.content:
                             if isinstance(result.content[0], types.TextContent):
                                 error_message = result.content[0].text
@@ -352,22 +351,22 @@ def get_tool_handler(
         def make_endpoint_func_no_args(
             endpoint_name: str, session: ClientSession
         ):  # Parameterless endpoint
-            async def tool(request: Request):  # No parameters but need request for headers
+            async def tool(request: Request):
                 # Process headers for forwarding if configured
                 forwarded_headers = {}
                 if client_header_forwarding_config and client_header_forwarding_config.get("enabled", False):
                     forwarded_headers = process_headers_for_server(request, client_header_forwarding_config)
+
                 
                 # Add headers to _meta if any headers are being forwarded
-                meta = {}
+                arguments = {}
                 if forwarded_headers:
-                    meta["headers"] = forwarded_headers
+                    arguments["__mcpo_forwarded_headers__"] = forwarded_headers
                 
-                logger.info(f"Calling endpoint: {endpoint_name}, with no args")
+                logger.info(f"Calling endpoint: {endpoint_name}, with args: {arguments}")
                 try:
-                    result = await session.call_tool(
-                        endpoint_name, arguments={}, meta=meta if meta else None
-                    )  # Empty dict
+                    result = await session.call_tool(endpoint_name, arguments=arguments)
+
 
                     if result.isError:
                         error_message = "Unknown tool execution error"
