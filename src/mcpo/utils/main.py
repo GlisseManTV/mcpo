@@ -295,7 +295,7 @@ def get_tool_handler(
                 
                 # Add headers to _meta if any headers are being forwarded
                 if forwarded_headers:
-                    args["__mcpo_forwarded_headers__"] = forwarded_headers
+                    args["mcpo_headers"] = forwarded_headers
                 
                 logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
                 try:
