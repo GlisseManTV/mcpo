@@ -31,13 +31,11 @@ MCP_ERROR_TO_HTTP_STATUS = {
 
 logger = logging.getLogger(__name__)
 
-
 def normalize_server_type(server_type: str) -> str:
     """Normalize server_type to a standard value."""
     if server_type in ["streamable_http", "streamablehttp", "streamable-http"]:
         return "streamable-http"
     return server_type
-
 
 def process_tool_response(result: CallToolResult) -> list:
     """Universal response processor for all tool endpoints"""
@@ -152,12 +150,7 @@ def _process_schema_property(
             temp_schema = dict(prop_schema)
             temp_schema["type"] = type_option
             type_hint, _ = _process_schema_property(
-                _model_cache,
-                temp_schema,
-                model_name_prefix,
-                prop_name,
-                False,
-                schema_defs=schema_defs,
+                _model_cache, temp_schema, model_name_prefix, prop_name, False, schema_defs=schema_defs
             )
             type_hints.append(type_hint)
 
@@ -273,6 +266,38 @@ def get_model_fields(form_model_name, properties, required_fields, schema_defs=N
 
     return model_fields
 
+def mask_sensitive_headers(args: dict) -> dict:
+    """Masks sensitive header values in logs."""
+    masked = args.copy()
+
+    if "mcpo_headers" in masked and isinstance(masked["mcpo_headers"], dict):
+        headers = masked["mcpo_headers"]
+        sensitive_keys = {
+            "authorization",
+            "token",
+            "api-key",
+            "x-api-key",
+            "x-auth-token",
+            "x-authorization",
+        }
+
+        for key in headers:
+            if key.lower() in sensitive_keys:
+                value = headers[key]
+                if isinstance(value, str):
+                    if value.lower().startswith("bearer "):
+                        headers[key] = "Bearer *****"
+                    elif value.lower().startswith("basic "):
+                        headers[key] = "Basic *****"
+                    elif value.lower().startswith("api-key "):
+                        headers[key] = "API-Key *****"
+                    else:
+                        headers[key] = "*****"
+            elif isinstance(headers[key], dict):
+                headers[key] = mask_sensitive_headers({"value": headers[key]})["value"]
+
+    return masked
+
 
 def get_tool_handler(
     session,
@@ -291,34 +316,28 @@ def get_tool_handler(
 
         def make_endpoint_func(
             endpoint_name: str, FormModel, session: ClientSession
-        ):  # Parameterized endpoint
+        ):
             async def tool(
                 form_data: FormModel, request: Request
             ) -> Union[ResponseModel, Any]:
                 args = form_data.model_dump(exclude_none=True, by_alias=True)
 
-                # Process headers for forwarding if configured
                 forwarded_headers = {}
-                if (
-                    client_header_forwarding_config
-                    and client_header_forwarding_config.get("enabled", False)
-                ):
-                    forwarded_headers = process_headers_for_server(
-                        request, client_header_forwarding_config
-                    )
+                if client_header_forwarding_config and client_header_forwarding_config.get("enabled", False):
+                    forwarded_headers = process_headers_for_server(request, client_header_forwarding_config)
 
-                # Add headers to _meta if any headers are being forwarded
-                meta = {}
                 if forwarded_headers:
-                    meta["headers"] = forwarded_headers
+                    args["mcpo_headers"] = forwarded_headers
 
-                logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
+                masked_args = mask_sensitive_headers(args)
+
+                logger.info(f"Calling endpoint: {endpoint_name}, with args: {masked_args}")
                 try:
                     result = await session.call_tool(endpoint_name, arguments=args)
-
+                    logger.info(f"{result}")
                     if result.isError:
                         error_message = "Unknown tool execution error"
-                        error_data = None  # Initialize error_data
+                        error_data = None
                         if result.content:
                             if isinstance(result.content[0], types.TextContent):
                                 error_message = result.content[0].text
@@ -366,29 +385,21 @@ def get_tool_handler(
         def make_endpoint_func_no_args(
             endpoint_name: str, session: ClientSession
         ):  # Parameterless endpoint
-            async def tool(
-                request: Request,
-            ):  # No parameters but need request for headers
+            async def tool(request: Request):
                 # Process headers for forwarding if configured
                 forwarded_headers = {}
-                if (
-                    client_header_forwarding_config
-                    and client_header_forwarding_config.get("enabled", False)
-                ):
-                    forwarded_headers = process_headers_for_server(
-                        request, client_header_forwarding_config
-                    )
-
+                if client_header_forwarding_config and client_header_forwarding_config.get("enabled", False):
+                    forwarded_headers = process_headers_for_server(request, client_header_forwarding_config)
+                
                 # Add headers to _meta if any headers are being forwarded
-                meta = {}
+                arguments = {}
                 if forwarded_headers:
-                    meta["headers"] = forwarded_headers
-
-                logger.info(f"Calling endpoint: {endpoint_name}, with no args")
+                    arguments["mcpo_headers"] = forwarded_headers
+                
+                logger.info(f"Calling endpoint: {endpoint_name}, , with no args")
                 try:
-                    result = await session.call_tool(
-                        endpoint_name, arguments={}
-                    )  # Empty dict
+                    result = await session.call_tool(endpoint_name, arguments=arguments)
+
 
                     if result.isError:
                         error_message = "Unknown tool execution error"
