@@ -327,7 +327,7 @@ def get_tool_handler(
                 # Add headers to _meta if any headers are being forwarded
                 if forwarded_headers:
                     args["mcpo_headers"] = forwarded_headers
-                masked_args = mask_sensitive_headers(args)                
+                # masked_args = mask_sensitive_headers(args)                
                 logger.info(f"Calling endpoint: {endpoint_name}, with args: {args}")
                 try:
                     result = await session.call_tool(endpoint_name, arguments=args)
